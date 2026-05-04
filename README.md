@@ -1,38 +1,58 @@
 # Informe Gestión Trilladoras
 
-Este proyecto es una aplicación **Shiny** organizada en scripts modulares para UI, servidor, funciones auxiliares y parámetros.
+## Dependencias entre módulos
 
-## Estructura del proyecto
+Este proyecto es una aplicación **Shiny + bs4Dash** con carga dinámica de código desde `misc/`.
+
+### 1) Flujo principal de arranque
 
 ```text
-.
-├── global.R
-├── server.R
-├── ui.R
-└── misc
-    ├── functions.R
-    ├── parametros.R
-    ├── values.R
-    ├── modules
-    │   ├── Consolidado.R
-    │   ├── DetalleMunicipios.R
-    │   └── DetalleProveedores.R
-    └── ui
-        ├── body.R
-        ├── controlbar.R
-        ├── footer.R
-        ├── header.R
-        ├── preloader.R
-        └── sidebar.R
+app.R implícito (global.R + ui.R + server.R)
+  ├─ global.R
+  │   ├─ carga paquetes y datos globales
+  │   └─ ejecuta load_modules("misc") para registrar funciones/UI/modules
+  ├─ ui.R
+  │   └─ construye bs4DashPage usando objetos UI definidos en misc/ui/*.R
+  └─ server.R
+      └─ inicializa el módulo Consolidado(...)
 ```
 
-## Descripción rápida
+### 2) Dependencias de UI
 
-- `ui.R`: define la interfaz principal de la aplicación.
-- `server.R`: contiene la lógica del servidor.
-- `global.R`: carga librerías, configuración global y recursos compartidos.
-- `misc/functions.R`: funciones de apoyo reutilizables.
-- `misc/parametros.R`: parámetros de configuración de la app.
-- `misc/values.R`: valores compartidos/constantes.
-- `misc/modules/`: módulos funcionales de la aplicación.
-- `misc/ui/`: componentes de interfaz divididos por secciones.
+```text
+ui.R
+  └─ misc/ui/body.R
+      └─ usa ConsolidadoUI("Consolidado")
+          └─ definido en misc/modules/Consolidado.R
+```
+
+### 3) Dependencias funcionales entre módulos
+
+```text
+Consolidado (misc/modules/Consolidado.R)
+  ├─ usa DetalleProv(...)
+  │   └─ definido en misc/modules/DetalleProveedores.R
+  ├─ usa DetalleMun(...)
+  │   └─ definido en misc/modules/DetalleMunicipio.R
+  │       └─ usa MapaDoble(...)
+  │           └─ definido en misc/modules/MapaDoble.R
+  └─ usa componentes compartidos (p. ej. TablaReactable/UI y helpers racafe*)
+```
+
+### 4) Dependencias de datos y objetos globales
+
+- `global.R` carga objetos geográficos (`geo_dpto`, `geo_mun`, `geo_centroides`, `GeoTrilladoras`) y datos preprocesados desde `data/data.RData`.
+- `server.R` alimenta `Consolidado(...)` con reactivos y tablas de indicadores/detalle (`data_trl`, `Indicadores_*`, `detalle_prov`, `detalle_mun`).
+- `DetalleMun` consume `GeoTrilladoras` para ubicar marcadores en mapa.
+
+### 5) Orden de carga recomendado (ya implementado)
+
+`load_modules()` recorre `misc/**/*.R` por profundidad de ruta y reintenta archivos fallidos en múltiples pasadas; esto permite resolver dependencias cruzadas entre módulos sin hardcodear un orden único.
+
+## Nota de mantenimiento
+
+Cuando se agregue un módulo nuevo:
+
+1. Definir su `*UI` y su `moduleServer` en `misc/modules/`.
+2. Enlazarlo desde el módulo padre (por ejemplo, `Consolidado`) o desde `misc/ui/body.R`.
+3. Documentar aquí su dependencia de entrada/salida para mantener actualizado el mapa de módulos.
